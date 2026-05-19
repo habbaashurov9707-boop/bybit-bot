@@ -84,11 +84,25 @@ TF_H1  = "60"    # 1 час
 
 # ── Активы — Bybit USDT Perpetual ────────────────────────────
 ASSETS = [
+    {"symbol": "BTCUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
     {"symbol": "ETHUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
-    {"symbol": "BNBUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
     {"symbol": "SOLUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
     {"symbol": "XRPUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "AVAXUSDT", "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
     {"symbol": "LINKUSDT", "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "DOTUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "LTCUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "ATOMUSDT", "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "INJUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "DOGEUSDT", "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "SUIUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "OPUSDT",   "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "STXUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "WLDUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "ARBUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "FETUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "RNDRUSDT", "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
+    {"symbol": "TIAUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": False},
 ]
 
 
