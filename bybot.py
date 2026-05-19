@@ -37,12 +37,12 @@ load_dotenv()
 #  ⚙️  ГЛАВНЫЕ НАСТРОЙКИ — ИДЕНТИЧНО СТАРОМУ ПРИБЫЛЬНОМУ КОДУ
 # ══════════════════════════════════════════════════════════════
 
-MODE = "backtest"
+MODE = "paper"
 # "backtest" | "paper" | "live"
 
 # ── Период бэктеста ──────────────────────────────────────────
-BACKTEST_START = "2022-01-01"
-BACKTEST_END   = "2025-01-01"
+# BACKTEST_START = "2022-01-01"
+# BACKTEST_END   = "2025-01-01"
 
 # ── Баланс и риск ────────────────────────────────────────────
 STARTING_BALANCE   = 400.0
@@ -87,14 +87,8 @@ ASSETS = [
     {"symbol": "ETHUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
     {"symbol": "BNBUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
     {"symbol": "SOLUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
-    {"symbol": "AVAXUSDT", "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
     {"symbol": "XRPUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
     {"symbol": "LINKUSDT", "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
-    {"symbol": "SUIUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
-    {"symbol": "DOGEUSDT", "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
-    {"symbol": "ARBUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
-    {"symbol": "FETUSDT",  "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
-    {"symbol": "RNDRUSDT", "tf_m15": TF_M15, "tf_h1": TF_H1, "live": True},
 ]
 
 
@@ -358,7 +352,7 @@ def load_bybit(symbol: str, interval: str, limit: int,
 def load_ohlcv(asset: dict, tf_key: str,
                start: str = None, end: str = None) -> pd.DataFrame:
 
-    limit = 500000
+    limit = 3000
 
     return load_bybit(
         asset["symbol"],
