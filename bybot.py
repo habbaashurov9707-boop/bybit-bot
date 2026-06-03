@@ -1283,19 +1283,22 @@ def place_live_order(symbol: str, signal: str, entry: float,
         return False, None
 
 
-def update_live_trailing(live_positions: dict) -> dict:
+def update_live_trailing(live_positions: dict) -> tuple:
     """
     Проверяет и обновляет трейлинг-стоп для открытых live-позиций.
     Обновление SL на бирже через trading_stop().
     Если позиция уже закрыта биржей (TP/SL) — убираем из словаря.
+    Возвращает (live_positions, closed_symbols).
     """
     open_on_exchange = get_open_symbols()
+    closed_symbols = []
 
     for symbol in list(live_positions.keys()):
 
         # Если биржа уже закрыла позицию
         if symbol not in open_on_exchange:
             pos = live_positions.pop(symbol)
+            closed_symbols.append(symbol)
             side = "LONG" if pos["signal"] == "BUY" else "SHORT"
             print(f"  [CLOSED ON EXCHANGE] {symbol} {side}")
             tg_send(
@@ -1349,20 +1352,24 @@ def update_live_trailing(live_positions: dict) -> dict:
         except Exception as e:
             print(f"  WARNING update_live_trailing {symbol}: {e}")
 
-    return live_positions
+    return live_positions, closed_symbols
 
 
-def _live_trail_loop(positions_ref: list, lock: threading.Lock):
+def _live_trail_loop(positions_ref: list, lock: threading.Lock,
+                     cooldowns_ref: list):
     """
     Фоновый поток: обновляет трейлинг live-позиций каждые TRAIL_INTERVAL_SEC секунд.
     positions_ref[0] — dict {symbol: pos_data}, защищён lock.
+    cooldowns_ref[0] — dict {symbol: unix_timestamp}, защищён тем же lock.
     """
     while True:
         time.sleep(TRAIL_INTERVAL_SEC)
         with lock:
             if positions_ref[0]:
                 try:
-                    positions_ref[0] = update_live_trailing(positions_ref[0])
+                    positions_ref[0], closed = update_live_trailing(positions_ref[0])
+                    for sym in closed:
+                        cooldowns_ref[0][sym] = time.time() + COOLDOWN_LOSS_CANDLES * 15 * 60
                 except Exception as e:
                     print(f"  [live-trail-thread] WARNING: {e}")
 
@@ -1401,13 +1408,15 @@ def run_live():
     )
 
     # Разделяемый словарь позиций + мьютекс
-    positions_ref = [{}]
-    lock          = threading.Lock()
+    positions_ref  = [{}]
+    live_cooldowns = {}
+    cooldowns_ref  = [live_cooldowns]
+    lock           = threading.Lock()
 
     # Запускаем фоновый поток трейлинга
     trail_thread = threading.Thread(
         target=_live_trail_loop,
-        args=(positions_ref, lock),
+        args=(positions_ref, lock, cooldowns_ref),
         daemon=True,
         name="live-trail"
     )
@@ -1459,6 +1468,14 @@ def run_live():
             if len(open_symbols) >= MAX_OPEN_POSITIONS:
                 print(f"  Лимит позиций ({MAX_OPEN_POSITIONS})")
                 break
+
+            # Cooldown check
+            with lock:
+                cd_until = cooldowns_ref[0].get(symbol, 0)
+            if time.time() < cd_until:
+                mins_left = int((cd_until - time.time()) / 60)
+                print(f"  {symbol}: cooldown ещё {mins_left} мин")
+                continue
 
             try:
                 df, h1_lookup = prepare_asset(asset)
@@ -1512,6 +1529,17 @@ def run_live():
             f"Открыто: {len(open_symbols)}/{MAX_OPEN_POSITIONS}"
         )
         print(f"  Следующий скан сигналов через {SCAN_INTERVAL_MIN} мин...")
+
+        pct = (usdt_balance - STARTING_BALANCE) / STARTING_BALANCE * 100
+        signal_str = f"🔔 Сигналов найдено: {signals_found}" if signals_found > 0 else "😴 Сигналов нет"
+        tg_send(
+            f"🔍 <b>СКАН #{scan_count}</b> — {datetime.now(timezone.utc).strftime('%H:%M UTC')}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 Баланс : <b>${usdt_balance:.2f}</b> ({pct:+.1f}%)\n"
+            f"📂 Позиций: {len(open_symbols)}/{MAX_OPEN_POSITIONS}\n"
+            f"{signal_str}\n"
+            f"⏱ Следующий скан через {SCAN_INTERVAL_MIN} мин"
+        )
 
 
 # ══════════════════════════════════════════════════════════════
