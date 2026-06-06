@@ -46,7 +46,7 @@ BACKTEST_START = "2022-01-01"
 BACKTEST_END   = "2026-05-01"
 
 # ── Баланс и риск ────────────────────────────────────────────
-STARTING_BALANCE   = 400.0
+STARTING_BALANCE   = 963.0
 
 # Риск на сделку — всегда % от текущего баланса (растёт и падает вместе с ним)
 # При $400  → 1.5% = $6.0  на сделку
@@ -1153,13 +1153,13 @@ def round_price(price: float, tick: float) -> float:
     return round(round(price / tick) * tick, decimals)
 
 
-def set_leverage_bybit(symbol: str):
+def set_leverage_bybit(symbol: str, leverage: int = LEVERAGE):
     try:
         session.set_leverage(
             category     = "linear",
             symbol       = symbol,
-            buyLeverage  = str(LEVERAGE),
-            sellLeverage = str(LEVERAGE),
+            buyLeverage  = str(leverage),
+            sellLeverage = str(leverage),
         )
     except Exception as e:
         print(f"  WARNING set_leverage {symbol}: {e}")
@@ -1194,8 +1194,29 @@ def get_usdt_balance() -> float:
     return 0.0
 
 
+def dynamic_risk_leverage(conf: int, balance: float) -> tuple:
+    """
+    Динамический риск и плечо в зависимости от уверенности сигнала.
+    conf 65-79 → риск 1.5%, плечо 5x  (стандарт)
+    conf 80-89 → риск 2.5%, плечо 5x  (усиленный)
+    conf 90+   → риск 3.5%, плечо 10x (максимальный)
+    """
+    if conf >= 90:
+        risk_pct = 3.5
+        leverage = 10
+    elif conf >= 80:
+        risk_pct = 2.5
+        leverage = 5
+    else:
+        risk_pct = RISK_PERCENT   # 1.5%
+        leverage = LEVERAGE       # 5x
+
+    risk = min(balance * risk_pct / 100, MAX_RISK_USD * (leverage / LEVERAGE))
+    return risk, leverage
+
+
 def place_live_order(symbol: str, signal: str, entry: float,
-                     atr: float, balance: float) -> bool:
+                     atr: float, balance: float, conf: int = 65) -> bool:
     """
     Открытие позиции через Bybit V5 Unified Trading.
     SL и TP передаются прямо в ордер — надёжнее conditional-ордеров.
@@ -1203,15 +1224,15 @@ def place_live_order(symbol: str, signal: str, entry: float,
     локально в run_live() и обновляется через amend_order / cancel + replace.
     """
     try:
-        f    = get_instrument_info(symbol)
-        risk = calc_risk(balance)
-        qty  = round_qty(risk / atr, f["step_qty"])
+        f              = get_instrument_info(symbol)
+        risk, lev      = dynamic_risk_leverage(conf, balance)
+        qty            = round_qty(risk / atr, f["step_qty"])
 
         if qty < f["min_qty"]:
             print(f"  WARNING {symbol}: qty {qty} < minQty {f['min_qty']}")
             return False, None
 
-        set_leverage_bybit(symbol)
+        set_leverage_bybit(symbol, lev)
 
         side    = "Buy" if signal == "BUY" else "Sell"
         sl_dist = atr * 1.5
@@ -1244,15 +1265,18 @@ def place_live_order(symbol: str, signal: str, entry: float,
             tg_send(f"❌ <b>ОШИБКА ОРДЕРА</b> · {symbol}\n━━━━━━━━━━━━━━━━━━━━━━━━\n{err}")
             return False, None
 
-        order_id  = resp["result"].get("orderId", "?")
-        dir_label = "LONG" if signal == "BUY" else "SHORT"
-        print(f"  OK {symbol} {dir_label} qty={qty} ~{entry:.6g}  SL={sl:.6g}  TP={tp:.6g}  id={order_id}")
-        side_emoji = "🟢" if signal == "BUY" else "🔴"
+        order_id    = resp["result"].get("orderId", "?")
+        dir_label   = "LONG" if signal == "BUY" else "SHORT"
+        print(f"  OK {symbol} {dir_label} qty={qty} ~{entry:.6g}  SL={sl:.6g}  TP={tp:.6g}  lev={lev}x  id={order_id}")
+        side_emoji  = "🟢" if signal == "BUY" else "🔴"
         side_label2 = "LONG 📈" if signal == "BUY" else "SHORT 📉"
+        conf_bar    = "█" * (conf // 10) + "░" * (10 - conf // 10)
+        lev_label   = f"⚡ {lev}x 🔥" if lev > LEVERAGE else f"⚡ {lev}x"
         tg_send(
             f"{side_emoji} <b>ОРДЕР ИСПОЛНЕН · {symbol}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 {side_label2}   ⚡ {LEVERAGE}x\n"
+            f"📊 {side_label2}   {lev_label}\n"
+            f"🎯 Уверенность: <code>{conf_bar}</code> {conf}%\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📥 Цена  : <code>{entry:.6g}</code>\n"
             f"📦 Кол-во: <code>{qty}</code>\n"
@@ -1568,7 +1592,7 @@ def run_live():
                 signals_found += 1
                 entry = df["close"].iloc[i]
 
-                ok, pos_data = place_live_order(symbol, signal, entry, atr, usdt_balance)
+                ok, pos_data = place_live_order(symbol, signal, entry, atr, usdt_balance, conf)
 
                 if ok and pos_data:
                     open_symbols.add(symbol)
