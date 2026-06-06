@@ -1299,14 +1299,72 @@ def update_live_trailing(live_positions: dict) -> tuple:
         if symbol not in open_on_exchange:
             pos = live_positions.pop(symbol)
             closed_symbols.append(symbol)
-            side = "LONG" if pos["signal"] == "BUY" else "SHORT"
-            print(f"  [CLOSED ON EXCHANGE] {symbol} {side}")
+            signal = pos["signal"]
+            entry  = pos["entry"]
+            tp     = pos["tp"]
+            sl     = pos["sl"]
+            risk   = pos.get("risk", 0)
+            qty    = pos.get("qty", 0)
+            side   = "LONG 📈" if signal == "BUY" else "SHORT 📉"
+
+            # Определяем причину закрытия по текущей цене
+            try:
+                last_price = get_current_price(symbol)
+                tp_dist = abs(last_price - tp)
+                sl_dist = abs(last_price - sl)
+                hit_tp  = tp_dist < sl_dist
+            except Exception:
+                last_price = None
+                hit_tp = False
+
+            # Считаем PnL
+            if last_price:
+                raw_pnl = (
+                    (last_price - entry) if signal == "BUY" else (entry - last_price)
+                ) * qty
+                pnl = raw_pnl * (1 - COMMISSION)
+            else:
+                pnl = None
+
+            # Иконки и заголовок
+            if hit_tp:
+                header    = "✅ <b>ТЕЙК-ПРОФИТ</b>"
+                result    = "TP"
+                emoji     = "🏆"
+            else:
+                header    = "🛑 <b>СТОП-ЛОСС</b>"
+                result    = "SL"
+                emoji     = "💀"
+
+            pnl_str = (
+                f"<b>+${pnl:.2f}</b> 🟢" if pnl and pnl >= 0
+                else f"<b>-${abs(pnl):.2f}</b> 🔴"
+            ) if pnl is not None else "—"
+
+            price_str = f"<code>{last_price:.6g}</code>" if last_price else "—"
+
+            open_time = pos.get("open_time", "")
+            duration  = ""
+            if open_time:
+                try:
+                    opened = datetime.fromisoformat(open_time.replace("Z", "+00:00"))
+                    mins   = int((datetime.now(timezone.utc) - opened).total_seconds() / 60)
+                    h, m   = divmod(mins, 60)
+                    duration = f"⏱ Время  : {h}ч {m}мин\n" if h else f"⏱ Время  : {m} мин\n"
+                except Exception:
+                    pass
+
+            print(f"  [{result}] {symbol} {side}  PnL={pnl_str}")
             tg_send(
-                f"🏁 <b>ПОЗИЦИЯ ЗАКРЫТА · {symbol}</b>\n"
+                f"{emoji} {header} · <b>{symbol}</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📊 {side}\n"
-                f"📥 Вход : <code>{pos['entry']:.6g}</code>\n"
-                f"ℹ️ Закрыта биржей по SL / TP\n"
+                f"📊 {side}   ⚡ {LEVERAGE}x\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📥 Вход  : <code>{entry:.6g}</code>\n"
+                f"📤 Выход : {price_str}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💵 PnL   : {pnl_str}\n"
+                f"{duration}"
                 f"🕐 {datetime.now(timezone.utc).strftime('%H:%M UTC')}"
             )
             continue
